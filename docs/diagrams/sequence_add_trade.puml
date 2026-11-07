@@ -1,0 +1,45 @@
+@startuml sequence_add_trade
+title POST /trades - storing an incoming trade
+
+actor Client
+participant "main.py\nadd_trade()" as Main
+participant "rules.py" as Rules
+participant "db.py" as DB
+database "SQLite\ntrades table" as SQLite
+
+Client -> Main : POST /trades\n{trade_id, version, counterparty_id,\n portfolio_id, maturity_date}
+
+note right of Main
+  FastAPI checks the body against TradeIn first.
+  A missing field or bad date -> 422.
+end note
+
+Main -> Rules : check_maturity_date(maturity_date, today)
+alt maturity_date < today
+  Rules --> Main : raise MaturityDateInPastError
+  Main --> Client : 400 Bad Request
+else maturity date is today or later
+  Rules --> Main : ok
+  Main -> DB : get_highest_version(trade_id)
+  DB -> SQLite : SELECT MAX(version) ...
+  SQLite --> DB : highest version or NULL
+  DB --> Main : highest_version
+
+  Main -> Rules : decide_action(version, highest_version)
+  alt version < highest_version
+    Rules --> Main : raise LowerVersionError
+    Main --> Client : 409 Conflict
+  else version == highest_version
+    Rules --> Main : "replace"
+    Main -> DB : replace_trade(trade)
+    DB -> SQLite : UPDATE trades ...
+    Main --> Client : 200 OK + stored trade
+  else no stored version, or version > highest_version
+    Rules --> Main : "insert"
+    Main -> DB : insert_trade(trade)
+    DB -> SQLite : INSERT INTO trades ...
+    Main --> Client : 201 Created + stored trade
+  end
+end
+
+@enduml

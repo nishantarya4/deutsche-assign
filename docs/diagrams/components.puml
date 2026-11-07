@@ -1,0 +1,38 @@
+@startuml components
+title Trade Store - how the pieces fit together
+
+actor Client
+
+package "app" {
+  component "main.py\n(FastAPI endpoints,\nTradeIn model,\nget_conn / get_today)" as Main
+  component "rules.py\n(check_maturity_date,\ndecide_action, is_expired,\nexceptions)" as Rules
+  component "db.py\n(sqlite3 functions)" as DB
+}
+
+database "SQLite file\ntrades.db" as SQLite
+
+package "tests" {
+  component "test_rules.py" as TRules
+  component "test_db.py" as TDB
+  component "test_api.py\n+ conftest.py" as TAPI
+}
+
+package "GitHub Actions (ci.yml)" {
+  component "Job: Regression tests\n(pytest)" as CITest
+  component "Job: Vulnerability scan\n(pip freeze + Trivy,\nfail on CRITICAL)" as CIScan
+}
+
+Client --> Main : HTTP\nPOST /trades\nGET /trades\nGET /trades/{trade_id}\nGET /health
+Main --> Rules : validate trade
+Main --> DB : read / write trades
+DB --> SQLite : SQL
+
+TRules ..> Rules : unit tests
+TDB ..> DB : tests on a temporary database
+TAPI ..> Main : tests through TestClient
+
+CITest ..> TRules : runs
+CITest ..> TDB : runs
+CITest ..> TAPI : runs
+
+@enduml
