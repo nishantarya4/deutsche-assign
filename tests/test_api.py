@@ -1,7 +1,20 @@
+from datetime import date
+
 from app import db
+from app.main import app, get_today
 
 # The `client` and `conn` fixtures live in conftest.py.
-# In these tests "today" is always 2026-11-07.
+# In these tests "today" starts as 2026-11-07 unless a test moves it with set_today().
+
+
+def set_today(new_today):
+    """Make the app believe today is new_today for the rest of this test."""
+
+    def use_new_today():
+        """Return the date this test chose as today."""
+        return new_today
+
+    app.dependency_overrides[get_today] = use_new_today
 
 
 def trade_body(trade_id="T1", version=1, counterparty_id="CP-1",
@@ -158,3 +171,35 @@ def test_get_unknown_trade_returns_404(client):
     response = client.get("/trades/NOPE")
     assert response.status_code == 404
     assert response.json() == {"detail": "Trade NOPE not found"}
+
+
+# ---------- automatic expiry ----------
+
+def test_trade_becomes_expired_in_list_after_maturity_passes(client):
+    """A trade stored before its maturity shows expired true in GET /trades once maturity has passed."""
+    client.post("/trades", json=trade_body(maturity_date="2026-11-10"))
+    set_today(date(2026, 11, 11))
+
+    response = client.get("/trades")
+
+    assert response.json()[0]["expired"] is True
+
+
+def test_trade_becomes_expired_in_single_lookup_after_maturity_passes(client):
+    """A trade stored before its maturity shows expired true in GET /trades/{id} once maturity has passed."""
+    client.post("/trades", json=trade_body(maturity_date="2026-11-10"))
+    set_today(date(2026, 11, 11))
+
+    response = client.get("/trades/T1")
+
+    assert response.json()[0]["expired"] is True
+
+
+def test_trade_maturing_today_is_not_expired(client):
+    """On the maturity date itself the trade is not expired yet."""
+    client.post("/trades", json=trade_body(maturity_date="2026-11-10"))
+    set_today(date(2026, 11, 10))
+
+    response = client.get("/trades")
+
+    assert response.json()[0]["expired"] is False
