@@ -104,3 +104,57 @@ def test_badly_formatted_date_is_rejected(client):
     """A maturity date that is not a real ISO date is rejected with 422."""
     response = client.post("/trades", json=trade_body(maturity_date="20/05/2027"))
     assert response.status_code == 422
+
+
+# ---------- GET /trades ----------
+
+def test_list_trades_is_empty_when_nothing_stored(client):
+    """With no trades stored, GET /trades returns an empty list."""
+    response = client.get("/trades")
+    assert response.status_code == 200
+    assert response.json() == []
+
+
+def test_list_trades_returns_problem_statement_rows_in_order(client):
+    """The four trades from the problem statement come back sorted by id, then highest version first."""
+    # Same ids, versions, counterparties and portfolios as the problem statement.
+    # Maturity dates are moved into the future, because past dates are now rejected.
+    client.post("/trades", json=trade_body("T3", 3, "CP-3", "B2", "2028-05-20"))
+    client.post("/trades", json=trade_body("T2", 1, "CP-1", "B1", "2027-05-20"))
+    client.post("/trades", json=trade_body("T1", 1, "CP-1", "B1", "2027-05-20"))
+    client.post("/trades", json=trade_body("T2", 2, "CP-2", "B1", "2027-05-20"))
+
+    response = client.get("/trades")
+
+    assert response.status_code == 200
+    rows = []
+    for trade in response.json():
+        rows.append((trade["trade_id"], trade["version"], trade["counterparty_id"], trade["portfolio_id"]))
+    assert rows == [
+        ("T1", 1, "CP-1", "B1"),
+        ("T2", 2, "CP-2", "B1"),
+        ("T2", 1, "CP-1", "B1"),
+        ("T3", 3, "CP-3", "B2"),
+    ]
+
+
+# ---------- GET /trades/{trade_id} ----------
+
+def test_get_one_trade_returns_all_versions_highest_first(client):
+    """GET /trades/T2 returns both versions of T2, highest version first."""
+    client.post("/trades", json=trade_body("T2", 1, "CP-1"))
+    client.post("/trades", json=trade_body("T2", 2, "CP-2"))
+    client.post("/trades", json=trade_body("T1", 1, "CP-1"))
+
+    response = client.get("/trades/T2")
+
+    assert response.status_code == 200
+    versions = [t["version"] for t in response.json()]
+    assert versions == [2, 1]
+
+
+def test_get_unknown_trade_returns_404(client):
+    """Asking for a trade id that was never stored answers 404."""
+    response = client.get("/trades/NOPE")
+    assert response.status_code == 404
+    assert response.json() == {"detail": "Trade NOPE not found"}
