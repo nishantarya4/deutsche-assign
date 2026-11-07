@@ -72,3 +72,18 @@ def add_trade(trade_in: TradeIn, response: Response,
         db.insert_trade(conn, trade)
 
     return trade
+
+
+@app.get("/trades")
+def list_trades(conn=Depends(get_conn)):
+    """Return every stored trade, ordered by trade id and then highest version first."""
+    return db.list_trades(conn)
+
+
+@app.get("/trades/{trade_id}")
+def get_trade(trade_id: str, conn=Depends(get_conn)):
+    """Return all versions of one trade, highest first, or 404 if it does not exist."""
+    trades = db.get_trades_by_id(conn, trade_id)
+    if not trades:
+        raise HTTPException(status_code=404, detail=f"Trade {trade_id} not found")
+    return trades
