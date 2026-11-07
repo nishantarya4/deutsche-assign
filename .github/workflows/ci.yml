@@ -1,0 +1,74 @@
+# Runs on every push and pull request.
+# Job 1 runs the full test suite (regression testing).
+# Job 2 scans every open-source dependency and fails the build on CRITICAL vulnerabilities.
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Regression tests
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+
+      - name: Run tests
+        run: pytest -v
+
+  security-scan:
+    name: Open-source vulnerability scan
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out the code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Set up Python 3.13
+        uses: actions/setup-python@6d4fd22b20465ccc0f7354476588e8df7c9ca0e0 # v7.1.0
+        with:
+          python-version: "3.13"
+
+      # requirements.txt only lists the packages we chose directly.
+      # Installing them and running `pip freeze` gives the full list,
+      # including every package they pull in, so Trivy can check them all.
+      - name: List every installed package
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements-dev.txt
+          mkdir scan
+          pip freeze > scan/requirements.txt
+          cat scan/requirements.txt
+
+      - name: Report all known vulnerabilities (does not fail the build)
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: scan
+          scanners: vuln
+          severity: UNKNOWN,LOW,MEDIUM,HIGH,CRITICAL
+          exit-code: "0"
+
+      - name: Fail the build on CRITICAL vulnerabilities
+        uses: aquasecurity/trivy-action@ed142fd0673e97e23eac54620cfb913e5ce36c25 # v0.36.0
+        with:
+          scan-type: fs
+          scan-ref: scan
+          scanners: vuln
+          severity: CRITICAL
+          exit-code: "1"
+          skip-setup-trivy: true
