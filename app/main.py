@@ -75,14 +75,16 @@ def add_trade(trade_in: TradeIn, response: Response,
 
 
 @app.get("/trades")
-def list_trades(conn=Depends(get_conn)):
-    """Return every stored trade, ordered by trade id and then highest version first."""
+def list_trades(conn=Depends(get_conn), today=Depends(get_today)):
+    """Mark matured trades as expired, then return every trade ordered by id and highest version first."""
+    db.mark_expired_trades(conn, today)
     return db.list_trades(conn)
 
 
 @app.get("/trades/{trade_id}")
-def get_trade(trade_id: str, conn=Depends(get_conn)):
-    """Return all versions of one trade, highest first, or 404 if it does not exist."""
+def get_trade(trade_id: str, conn=Depends(get_conn), today=Depends(get_today)):
+    """Mark matured trades as expired, then return all versions of one trade, or 404 if it does not exist."""
+    db.mark_expired_trades(conn, today)
     trades = db.get_trades_by_id(conn, trade_id)
     if not trades:
         raise HTTPException(status_code=404, detail=f"Trade {trade_id} not found")
