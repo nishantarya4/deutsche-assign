@@ -1,18 +1,10 @@
 from datetime import date
 
-import pytest
-
 from app import db
 
 TODAY = date(2026, 11, 7)
 
-
-@pytest.fixture
-def conn(tmp_path):
-    """Give each test its own fresh database file, and close it afterwards."""
-    connection = db.connect(tmp_path / "test.db")
-    yield connection
-    connection.close()
+# The `conn` fixture (a fresh test database) lives in conftest.py.
 
 
 def make_trade(trade_id="T1", version=1, counterparty_id="CP-1",
