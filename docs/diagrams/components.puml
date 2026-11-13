@@ -11,6 +11,8 @@ package "app" {
 
 database "SQLite file\ntrades.db" as SQLite
 
+artifact "Open-source dependencies\n(requirements*.txt +\npackages they pull in)" as Deps
+
 package "tests" {
   component "test_rules.py" as TRules
   component "test_db.py" as TDB
@@ -34,5 +36,6 @@ TAPI ..> Main : tests through TestClient
 CITest ..> TRules : runs
 CITest ..> TDB : runs
 CITest ..> TAPI : runs
+CIScan ..> Deps : scans for\nvulnerabilities
 
 @enduml

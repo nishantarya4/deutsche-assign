@@ -1,5 +1,7 @@
 # Trade Store
 
+[![CI](https://github.com/nishantarya4/deutsche-assign/actions/workflows/ci.yml/badge.svg)](https://github.com/nishantarya4/deutsche-assign/actions/workflows/ci.yml)
+
 A small REST API that receives trades, checks them against business rules and stores them in a SQL database (SQLite).
 
 Built with **Python 3.13**, **FastAPI** and **pytest**, using test-driven development (each test was written and seen failing before the code that makes it pass).
@@ -108,18 +110,38 @@ A body with a missing field or an invalid date gets **422** with FastAPI's stand
 
 ## CI pipeline (GitHub Actions)
 
-[.github/workflows/ci.yml](.github/workflows/ci.yml) runs on every push and pull request:
+[.github/workflows/ci.yml](.github/workflows/ci.yml) runs two jobs:
 
 1. **Regression tests:** installs the dependencies on Python 3.13 and runs `pytest`. Any failing test fails the build.
 2. **Open-source vulnerability scan:** installs the dependencies, writes the full list of installed packages (including the ones pulled in indirectly) with `pip freeze`, and scans it with [Trivy](https://github.com/aquasecurity/trivy). All findings are listed in the log, and the **build fails if any CRITICAL vulnerability is found**.
 
 All actions are pinned to exact commit hashes.
 
+**When it runs:**
+
+- On every push and every pull request.
+- **On demand:** open the [Actions tab](https://github.com/nishantarya4/deutsche-assign/actions/workflows/ci.yml), click **Run workflow**, choose a branch and click **Run workflow** again.
+- **Weekly:** every Monday at 06:00 UTC, so a vulnerability published after the last push still fails a build. GitHub pauses scheduled runs in a public repository after 60 days without activity; a push or a manual run turns them back on.
+
+**Checking the result:**
+
+- The badge at the top of this README shows whether the latest build on `main` passed.
+- In a build, the **Open-source vulnerability scan** job shows three steps: **List every installed package** (what was scanned), **Report all known vulnerabilities** (all findings), and **Fail the build on CRITICAL vulnerabilities** (the gate).
+
 ## Diagrams
 
-The PlantUML source files are in [docs/diagrams](docs/diagrams):
+### POST /trades: every path through the endpoint
 
-- [sequence_add_trade.puml](docs/diagrams/sequence_add_trade.puml) shows every path through `POST /trades`.
-- [components.puml](docs/diagrams/components.puml) shows how the modules, the database, the tests and the CI jobs connect.
+![Sequence diagram of POST /trades](docs/diagrams/sequence_add_trade.svg)
 
-GitHub shows `.puml` files as text. To see the pictures, paste the file into the PlantUML web server (https://www.plantuml.com/plantuml) or open it with a PlantUML extension in your editor.
+### How the pieces fit together
+
+![Component diagram](docs/diagrams/components.svg)
+
+The PlantUML source for each diagram is next to its image in [docs/diagrams](docs/diagrams): [sequence_add_trade.puml](docs/diagrams/sequence_add_trade.puml) and [components.puml](docs/diagrams/components.puml).
+
+**Updating a diagram:**
+
+1. Edit the `.puml` file.
+2. Preview it, either by pasting it into https://www.plantuml.com/plantuml or with the VS Code **PlantUML** extension (`Alt+D`).
+3. Export the new `.svg` from the preview, replace the old one, and commit both files.
