@@ -1,4 +1,6 @@
-# Runs on every push and pull request.
+# Runs on every push and pull request, on demand ("Run workflow" button
+# in the Actions tab), and once a week so newly published vulnerabilities
+# are caught even when no code changes.
 # Job 1 runs the full test suite (regression testing).
 # Job 2 scans every open-source dependency and fails the build on CRITICAL vulnerabilities.
 name: CI
@@ -6,6 +8,9 @@ name: CI
 on:
   push:
   pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: "0 6 * * 1" # every Monday at 06:00 UTC
 
 permissions:
   contents: read
