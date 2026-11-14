@@ -1,13 +1,13 @@
+import asyncio
+from contextlib import asynccontextmanager
 from datetime import date
 
 from fastapi import Depends, FastAPI, HTTPException, Response
 from pydantic import BaseModel
 
-from app import db, rules
+from app import db, rules, scheduler
 
 DATABASE_PATH = "trades.db"
-
-app = FastAPI(title="Trade Store")
 
 
 class TradeIn(BaseModel):
@@ -32,6 +32,18 @@ def get_conn():
         yield conn
     finally:
         conn.close()
+
+
+@asynccontextmanager
+async def lifespan(app):
+    """On startup expire matured trades and start the daily expiry job; stop the job on shutdown."""
+    scheduler.run_expiry_job(DATABASE_PATH, get_today())
+    daily_job = asyncio.create_task(scheduler.run_daily_expiry(DATABASE_PATH, get_today))
+    yield
+    daily_job.cancel()
+
+
+app = FastAPI(title="Trade Store", lifespan=lifespan)
 
 
 @app.get("/health")
