@@ -14,7 +14,7 @@ Built with **Python 3.13**, **FastAPI** and **pytest**, using test-driven develo
 | A trade arrives with the **same version** as the one stored | The stored record is **replaced**, HTTP **200 OK** |
 | A trade is new, or has a **higher version** | Stored as a new row (older versions are kept), HTTP **201 Created** |
 | The **maturity date is earlier than today** | Rejected: `MaturityDateInPastError`, HTTP **400 Bad Request** |
-| A stored trade's **maturity date has passed** | Automatically marked `expired: true` |
+| A stored trade's **maturity date has passed** | Automatically marked `expired: true` by a scheduled job (at startup and daily just after midnight), and checked again on every read |
 
 A maturity date equal to today is accepted, and that trade is not expired until the next day.
 
@@ -25,11 +25,13 @@ app/
   main.py      FastAPI app: request model, endpoints, dependencies (database, today's date)
   rules.py     Business rules as plain functions, plus the two custom exceptions
   db.py        SQLite functions (built-in sqlite3 module)
+  scheduler.py Expiry job: runs at startup and daily just after midnight
 tests/
   conftest.py  Shared fixtures: fresh temporary database per test, fixed "today"
   test_rules.py
   test_db.py
   test_api.py
+  test_scheduler.py
 docs/diagrams/ PlantUML diagrams
 .github/workflows/ci.yml   CI pipeline
 ```
@@ -105,7 +107,11 @@ A body with a missing field or an invalid date gets **422** with FastAPI's stand
 - **SQLite through Python's built-in `sqlite3`.** It's a real SQL database with no server to install. The primary key `(trade_id, version)` keeps every version of a trade as its own row, matching the problem statement, where T2 has versions 1 and 2.
 - **Rules kept apart from storage.** `rules.py` has no database or web code, so each rule is tested on its own with plain values.
 - **"Today" is a dependency.** The endpoints never read the clock directly; they receive `today` from `get_today()`. Tests replace it with a fixed date, so they never depend on the real date.
-- **Expiry is checked on every read.** Both GET endpoints mark matured trades as expired before returning data, so the `expired` flag is always current and no background scheduler is needed.
+- **Expiry is applied in two ways.**
+  - **A scheduled job** marks matured trades as expired directly in the database: once when the app starts, then every day just after midnight. It uses Python's built-in `asyncio` (no scheduler library), so the stored data stays correct even if nobody calls the API.
+  - **Every GET request** applies the same check before returning data. Responses are therefore exactly right even between scheduled runs, for example in the minute after midnight.
+
+  The job is safe to run any number of times, because it only changes trades that are not yet expired.
 - **Ordering.** Trade ids are sorted as text, so `T10` comes before `T2`.
 
 ## CI pipeline (GitHub Actions)

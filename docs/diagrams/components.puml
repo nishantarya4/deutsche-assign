@@ -7,6 +7,7 @@ package "app" {
   component "main.py\n(FastAPI endpoints,\nTradeIn model,\nget_conn / get_today)" as Main
   component "rules.py\n(check_maturity_date,\ndecide_action, is_expired,\nexceptions)" as Rules
   component "db.py\n(sqlite3 functions)" as DB
+  component "scheduler.py\n(expiry job: at startup +\ndaily after midnight)" as Sched
 }
 
 database "SQLite file\ntrades.db" as SQLite
@@ -17,6 +18,7 @@ package "tests" {
   component "test_rules.py" as TRules
   component "test_db.py" as TDB
   component "test_api.py\n+ conftest.py" as TAPI
+  component "test_scheduler.py" as TSched
 }
 
 package "GitHub Actions (ci.yml)" {
@@ -27,6 +29,8 @@ package "GitHub Actions (ci.yml)" {
 Client --> Main : HTTP\nPOST /trades\nGET /trades\nGET /trades/{trade_id}\nGET /health
 Main --> Rules : validate trade
 Main --> DB : read / write trades
+Main --> Sched : starts on startup
+Sched --> DB : mark matured\ntrades expired
 DB --> SQLite : SQL
 
 TRules ..> Rules : unit tests
@@ -36,6 +40,8 @@ TAPI ..> Main : tests through TestClient
 CITest ..> TRules : runs
 CITest ..> TDB : runs
 CITest ..> TAPI : runs
+CITest ..> TSched : runs
+TSched ..> Sched : tests job + startup
 CIScan ..> Deps : scans for\nvulnerabilities
 
 @enduml
